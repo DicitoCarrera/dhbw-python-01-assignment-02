@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import List
 
 # === 1. Define the types (Entities) ===
 
 
-# Enum to model the Snack sum type
 class Snack(Enum):
     DORITOS = auto()
     OREOS = auto()
@@ -30,14 +30,14 @@ class Stock:
 
 @dataclass
 class Machine:
-    stocks: list[Stock]
+    stocks: List[Stock]
 
 
 @dataclass
 class Account:
     name: str
     balance: float
-    snacks: list[Snack]
+    snacks: List[Snack]
 
 
 # === 2. Define error types for validations ===
@@ -89,7 +89,7 @@ def new_stock(snack: Snack, price: float, amount: int) -> ValuePositiveError | S
     return Stock(snack=snack, price=valid_price, amount=valid_amount)
 
 
-def new_machine(stocks: list[Stock]) -> Machine:
+def new_machine(stocks: List[Stock]) -> Machine:
     return Machine(stocks=stocks)
 
 
@@ -109,11 +109,11 @@ def get_balance(account: Account) -> float:
     return account.balance
 
 
-def get_stocks(machine: Machine) -> list[Stock]:
+def get_stocks(machine: Machine) -> List[Stock]:
     return machine.stocks
 
 
-def get_bought_products(account: Account) -> list[Snack]:
+def get_bought_products(account: Account) -> List[Snack]:
     return account.snacks
 
 
@@ -122,83 +122,40 @@ def get_bought_products(account: Account) -> list[Snack]:
 
 def buy(
     account: Account, snack: Snack, machine: Machine
-) -> (
-    PurchaseError
-    | tuple[
-        Account,
-        Machine,
-    ]
-):
+) -> PurchaseError | tuple[Account, Machine]:
     stock: Stock | None = find_stock(snack=snack, stocks=machine.stocks)
 
     if stock is None:
         return InsufficientStock()
 
-    if account.balance >= stock.price:
-        if stock.amount > 0:
-            new_account = Account(
-                name=account.name,
-                balance=account.balance - stock.price,
-                snacks=[snack] + account.snacks,
-            )
-            new_stock = Stock(snack=snack, price=stock.price, amount=stock.amount - 1)
-            new_machine = Machine(
-                stocks=replace_stock(
-                    snack=snack, new_stock=new_stock, stocks=machine.stocks
-                )
-            )
-            return new_account, new_machine
-        else:
-            return InsufficientStock()
-    else:
-        return InsufficientFunds()
+    if account.balance < stock.price:
+        return InsufficientStock()
+
+    if stock.amount == 0:
+        return InsufficientStock()
+
+    new_account = Account(
+        name=account.name,
+        balance=account.balance - stock.price,
+        snacks=[snack] + account.snacks,  # Add the snack to the account's snack list
+    )
+    new_stock = Stock(snack=snack, price=stock.price, amount=stock.amount - 1)
+    new_machine = Machine(
+        stocks=replace_stock(snack=snack, new_stock=new_stock, stocks=machine.stocks)
+    )
+
+    return new_account, new_machine
 
 
 # === Helper functions ===
 
 
-def find_stock(snack: Snack, stocks: list[Stock]) -> Stock | None:
+def find_stock(snack: Snack, stocks: List[Stock]) -> Stock | None:
     for s in stocks:
         if s.snack == snack:
             return s
     return None
 
 
-def replace_stock(snack: Snack, new_stock: Stock, stocks: list[Stock]) -> list[Stock]:
+def replace_stock(snack: Snack, new_stock: Stock, stocks: List[Stock]) -> List[Stock]:
     return [new_stock if s.snack == snack else s for s in stocks]
-
-
-# === Example Usage ===
-
-# Create snacks
-doritos = Snack.DORITOS
-oreos = Snack.OREOS
-
-# Create stocks
-stock1: ValuePositiveError | Stock = new_stock(snack=doritos, price=1.5, amount=10)
-stock2: ValuePositiveError | Stock = new_stock(snack=oreos, price=2.0, amount=5)
-
-# Create a machine
-machine: Machine = new_machine(stocks=[stock1, stock2])
-
-# Create an account
-account: ValuePositiveError | Account = new_account(name="Alice", balance=20.0)
-
-# Make a purchase
-result = buy(account=account, snack=doritos, machine=machine)
-
-match result:
-    case PurchaseError():
-        pass
-    case (Account(), Machine()):
-        account, machine = result
-
-result = buy(account=account, snack=oreos, machine=machine)
-
-print(result)
-
-match result:
-    case PurchaseError():
-        pass
-    case (Account(), Machine()):
-        account, machine = result
